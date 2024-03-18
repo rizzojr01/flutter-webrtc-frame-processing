@@ -8,6 +8,11 @@ import org.webrtc.GlRectDrawer;
 import org.webrtc.RendererCommon;
 import org.webrtc.ThreadUtils;
 import org.webrtc.VideoFrame;
+import org.webrtc.VideoFrame.Buffer;
+import io.flutter.plugin.common.EventChannel;
+import com.cloudwebrtc.webrtc.utils.ConstraintsMap;
+import java.nio.ByteBuffer;
+import java.io.*;
 
 import java.util.concurrent.CountDownLatch;
 
@@ -20,6 +25,8 @@ import java.util.concurrent.CountDownLatch;
  * Interaction from SurfaceHolder lifecycle in surfaceCreated, surfaceChanged, and surfaceDestroyed.
  */
 public class SurfaceTextureRenderer extends EglRenderer {
+  private EventChannel.EventSink eventSink;
+  private int id;
   // Callback for reporting renderer events. Read-only after initilization so no lock required.
   private RendererCommon.RendererEvents rendererEvents;
   private final Object layoutLock = new Object();
@@ -97,6 +104,37 @@ public class SurfaceTextureRenderer extends EglRenderer {
   public void onFrame(VideoFrame frame) {
     updateFrameDimensionsAndReportEvents(frame);
     super.onFrame(frame);
+//    System.out.println("VideoFrame Timestamp: " + Long.toString(frame.getTimestampNs()));
+
+    ConstraintsMap params = new ConstraintsMap();
+    params.putString("event", "onVideoFrame");
+
+    /*copy  frame buffer to byte array*/
+//    ByteBuffer[] planes;
+    ByteBuffer yData;
+    VideoFrame.I420Buffer i420Buffer  = frame.getBuffer().toI420();
+    yData = i420Buffer.getDataY();
+    byte[] bytes;
+    bytes = new byte[yData.remaining()];
+//    System.out.println("====Bytes Length==== :" + Integer.toString(bytes.length));
+    yData.get(bytes);
+    params.putByte("data", bytes);
+    if (eventSink != null)
+      eventSink.success(params.toMap());
+//    planes = {buffer.getDataY(), buffer.getDataU(), buffer.getDataV()};
+//    bytes = new byte[buffer.data.remaining()];
+//    buffer.data.get(bytes);
+
+//    params.putByte("data", bytes);
+//    if (yData.hasArray()){
+//      System.out.println("Buffer has array!");
+//      params.putByte("data", yData.array());
+//
+//      /*send event to texture event channel*/
+//      eventSink.success(params.toMap());}
+//    else{
+//      System.out.println("Buffer NO array");
+//    }
   }
 
   private SurfaceTexture texture;
@@ -106,7 +144,10 @@ public class SurfaceTextureRenderer extends EglRenderer {
     this.texture = texture;
     createEglSurface(texture);
   }
-
+  public void setEventSink(EventChannel.EventSink sink, int id){
+    this.eventSink = sink;
+    this.id = id;
+  }
   public void surfaceDestroyed() {
     ThreadUtils.checkIsOnMainThread();
     final CountDownLatch completionLatch = new CountDownLatch(1);

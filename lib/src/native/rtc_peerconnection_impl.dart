@@ -572,8 +572,25 @@ class RTCPeerConnectionNative extends RTCPeerConnection {
         'trackId': track.id,
         'streamIds': [stream?.id]
       });
-      return RTCRtpSenderNative.fromMap(response,
+      RTCRtpSender _sender = RTCRtpSenderNative.fromMap(response,
           peerConnectionId: _peerConnectionId);
+      RTCRtpParameters _parameters;
+      _parameters = _sender.parameters;
+      List<RTCHeaderExtension> _headerExtensions = [
+        RTCHeaderExtension(uri:
+        'http://www.webrtc.org/experiments/rtp-hdrext/video-frame-tracking-id',
+            id: 15, encrypted:false),
+        RTCHeaderExtension(uri:
+        'http://www.webrtc.org/experiments/rtp-hdrext/abs-capture-time',
+            id: 10, encrypted:false),
+        RTCHeaderExtension(uri:
+        'http://www.webrtc.org/experiments/rtp-hdrext/abs-send-time',
+            id: 2, encrypted:false)];
+      _parameters.headerExtensions = _headerExtensions;
+
+      _sender.setParameters(_parameters);
+
+      return _sender;
     } on PlatformException catch (e) {
       throw 'Unable to RTCPeerConnection::addTrack: ${e.message}';
     }

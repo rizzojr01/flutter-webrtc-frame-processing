@@ -144,7 +144,8 @@ void postEvent(FlutterEventSink sink, id _Nullable event) {
 #endif
   }
 
-  NSDictionary* fieldTrials = @{kRTCFieldTrialUseNWPathMonitor : kRTCFieldTrialEnabledValue};
+  NSDictionary* fieldTrials = @{kRTCFieldTrialUseNWPathMonitor : kRTCFieldTrialEnabledValue,
+                                @"WebRTC-VideoFrameTrackingIdAdvertised":kRTCFieldTrialEnabledValue};
   RTCInitFieldTrialDictionary(fieldTrials);
 
   self.peerConnections = [NSMutableDictionary new];

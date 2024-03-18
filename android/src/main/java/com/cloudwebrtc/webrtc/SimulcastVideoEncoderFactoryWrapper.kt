@@ -4,6 +4,10 @@ import org.webrtc.*
 import java.util.concurrent.Callable
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
+import java.nio.ByteBuffer
+
+import android.R.id.primary
+import android.R.array
 
 /*
 Copyright 2017, Lyo Kato <lyo.kato at gmail.com> (Original Author)
@@ -120,28 +124,107 @@ internal class SimulcastVideoEncoderFactoryWrapper(
             frame: VideoFrame,
             encodeInfo: VideoEncoder.EncodeInfo?
         ): VideoCodecStatus {
+
+            // Add Timestamp Watermark
+            val width: Int = frame.buffer.width
+            val height: Int = frame.buffer.height
+            val i420Buffer: VideoFrame.I420Buffer = frame.getBuffer().toI420()!!
+            val dataY: ByteBuffer = i420Buffer.getDataY()
+            val dataU: ByteBuffer = i420Buffer.getDataU()
+            val dataV: ByteBuffer = i420Buffer.getDataV()
+            var videoFrameTimestamp: Long = frame.timestampNs
+            print("Timestamp Before: "+videoFrameTimestamp.toString())
+            videoFrameTimestamp = videoFrameTimestamp/10000000
+            var videoFrameTimestampHex: String = videoFrameTimestamp.toString(8)
+            println("Timestamp: "+videoFrameTimestamp.toString())
+
+            val arrY = ByteArray(dataY.capacity())
+            dataY.get(arrY)
+            val arrU = ByteArray(dataU.capacity())
+            dataU.get(arrU)
+            val arrV = ByteArray(dataV.capacity())
+            dataV.get(arrV)
+
+            val blockSize: Int = kotlin.math.ceil(height*0.025).toInt()
+            val Nblocks: Int = 10
+            var digitIndex: Int = Nblocks-1
+            var intensity: Int = 0
+            if (videoFrameTimestampHex.length < Nblocks){
+                videoFrameTimestampHex = "0".repeat(Nblocks-videoFrameTimestampHex.length) + videoFrameTimestampHex
+            }
+            for (i in 0..blockSize) {
+                for (b in 0..Nblocks-1) {
+                    // First block is least significant
+                    intensity = (videoFrameTimestampHex[videoFrameTimestampHex.length-1-b] - '0') * 32
+                    for (j in 0..blockSize){
+                        arrY[i*width + j + b*blockSize] = intensity.toByte()
+                        if ((i%2==0) and (j%2==0)) {
+                            arrU[i/2 * width/2 + j/2 + b * blockSize/2] = 128.toByte()
+                            arrV[i/2 * width/2 + j/2 + b * blockSize/2] = 128.toByte()
+                        }
+                    }
+                }
+            }
+            val newYBuffer = ByteBuffer.allocateDirect(width*height)
+            newYBuffer.put(arrY)
+            newYBuffer.rewind()
+            val newUBuffer = ByteBuffer.allocateDirect(width/2*height/2)
+            newUBuffer.put(arrU)
+            newUBuffer.rewind()
+            val newVBuffer = ByteBuffer.allocateDirect(width/2*height/2)
+            newVBuffer.put(arrV)
+            newVBuffer.rewind()
+
+            val newBuffer = JavaI420Buffer.wrap(frame.buffer.width, frame.buffer.height, newYBuffer.slice(), i420Buffer.getStrideY(),
+                newUBuffer.slice(), i420Buffer.getStrideU(), newVBuffer.slice(), i420Buffer.getStrideV(), null)
+            val watermarkedFrame = VideoFrame(newBuffer, frame.rotation, frame.timestampNs)
+
             val future = executor.submit(Callable {
                 //LKLog.d { "encode() buffer=${frame.buffer}, thread=${Thread.currentThread().name} " +
                 //        "[${Thread.currentThread().id}]" }
                 if (streamSettings == null) {
-                    return@Callable encoder.encode(frame, encodeInfo)
-                } else if (frame.buffer.width == streamSettings!!.width) {
-                    return@Callable encoder.encode(frame, encodeInfo)
+                    return@Callable encoder.encode(watermarkedFrame, encodeInfo)
+                } else if (watermarkedFrame.buffer.width == streamSettings!!.width) {
+                    return@Callable encoder.encode(watermarkedFrame, encodeInfo)
                 } else {
                     // The incoming buffer is different than the streamSettings received in initEncode()
                     // Need to scale.
-                    val originalBuffer = frame.buffer
+                    val originalBuffer = watermarkedFrame.buffer
                     // TODO: Do we need to handle when the scale factor is weird?
                     val adaptedBuffer = originalBuffer.cropAndScale(
                         0, 0, originalBuffer.width, originalBuffer.height,
                         streamSettings!!.width, streamSettings!!.height
                     )
-                    val adaptedFrame = VideoFrame(adaptedBuffer, frame.rotation, frame.timestampNs)
+                    val adaptedFrame = VideoFrame(adaptedBuffer, watermarkedFrame.rotation, watermarkedFrame.timestampNs)
                     val result = encoder.encode(adaptedFrame, encodeInfo)
                     adaptedBuffer.release()
                     return@Callable result
                 }
             })
+
+//            Original frame
+//            val future = executor.submit(Callable {
+//                //LKLog.d { "encode() buffer=${frame.buffer}, thread=${Thread.currentThread().name} " +
+//                //        "[${Thread.currentThread().id}]" }
+//                if (streamSettings == null) {
+//                    return@Callable encoder.encode(frame, encodeInfo)
+//                } else if (frame.buffer.width == streamSettings!!.width) {
+//                    return@Callable encoder.encode(frame, encodeInfo)
+//                } else {
+//                    // The incoming buffer is different than the streamSettings received in initEncode()
+//                    // Need to scale.
+//                    val originalBuffer = frame.buffer
+//                    // TODO: Do we need to handle when the scale factor is weird?
+//                    val adaptedBuffer = originalBuffer.cropAndScale(
+//                        0, 0, originalBuffer.width, originalBuffer.height,
+//                        streamSettings!!.width, streamSettings!!.height
+//                    )
+//                    val adaptedFrame = VideoFrame(adaptedBuffer, frame.rotation, frame.timestampNs)
+//                    val result = encoder.encode(adaptedFrame, encodeInfo)
+//                    adaptedBuffer.release()
+//                    return@Callable result
+//                }
+//            })
             return future.get()
         }
 

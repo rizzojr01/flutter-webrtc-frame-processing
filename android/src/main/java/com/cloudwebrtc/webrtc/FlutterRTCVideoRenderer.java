@@ -123,6 +123,7 @@ public class FlutterRTCVideoRenderer implements EventChannel.StreamHandler {
     @Override
     public void onListen(Object o, EventChannel.EventSink sink) {
         eventSink = new AnyThreadSink(sink);
+        surfaceTextureRenderer.setEventSink(eventSink, id);
     }
 
     @Override

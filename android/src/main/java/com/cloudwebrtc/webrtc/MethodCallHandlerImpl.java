@@ -148,9 +148,11 @@ public class MethodCallHandlerImpl implements MethodCallHandler, StateProvider {
       return;
     }
 
+    String strFieldTrials = "WebRTC-VideoFrameTrackingIdAdvertised/Enabled/";
     PeerConnectionFactory.initialize(
             InitializationOptions.builder(context)
                     .setEnableInternalTracer(true)
+                    .setFieldTrials(strFieldTrials)
                     .createInitializationOptions());
 
     getUserMediaImpl = new GetUserMediaImpl(this, context);

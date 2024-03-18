@@ -68,4 +68,14 @@ class RTCVideoView extends StatelessWidget {
       ),
     );
   }
+
+  void eventListener(dynamic event) {
+    final Map<dynamic, dynamic> map = event;
+    switch (map['event']) {
+      case 'onVideoFrame':
+        dynamic videoFrame = map['data']; // <== Got video buffer here.
+        print('Video Event triggered');
+        break;
+    }
+  }
 }

@@ -112,6 +112,10 @@ class RTCVideoRenderer extends ValueNotifier<RTCVideoValue>
     if (_disposed) return;
     final Map<dynamic, dynamic> map = event;
     switch (map['event']) {
+      case 'onVideoFrame':
+        dynamic videoFrame = map['data']; // <== Got video buffer here.
+        print('Video Event triggered');
+        break;
       case 'didTextureChangeRotation':
         value =
             value.copyWith(rotation: map['rotation'], renderVideo: renderVideo);
